@@ -1,1 +1,72 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>적정 공사기간 산정기</title>
+<style>
+  body{font-family:'Malgun Gothic',sans-serif;max-width:1100px;margin:20px auto;padding:0 12px}
+  section{border:1px solid #ddd;border-radius:8px;padding:12px 16px;margin:12px 0}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
+  label{display:flex;flex-direction:column;font-size:14px}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  th,td{border:1px solid #ccc;padding:4px;text-align:center}
+  td input,td select{width:95%}
+  button{padding:6px 14px;margin:4px 2px;cursor:pointer}
+  .primary{background:#1f6feb;color:#fff;border:none;border-radius:6px;font-size:16px}
+  .ok{color:green;font-weight:bold}.ng{color:crimson;font-weight:bold}
+</style>
+</head>
+<body>
+<h1>적정 공사기간 산정기 <small>(2026 가이드라인 기준)</small></h1>
 
+<section>
+  <h2>1. 기본정보</h2>
+  <div class="grid">
+    <label>착공일 <input type="date" id="start" value="2027-03-01"></label>
+    <label>기상관측지점 <select id="station"></select></label>
+    <label>준비기간 유형 <select id="prepType"></select></label>
+    <label>준비기간(일) <input type="number" id="prepDays"></label>
+    <label>정리기간(일, 최대 30) <input type="number" id="cleanDays" value="30" min="0" max="30"></label>
+    <label><span><input type="checkbox" id="dust"> 수도권 미세먼지 (+5일/년)</span></label>
+    <label><span><input type="checkbox" id="round" checked> 월 비작업일수 정수 반올림</span></label>
+  </div>
+</section>
+
+<section>
+  <h2>2. 주공정(CP) 공종</h2>
+  <p style="font-size:13px">작업일수 = 수량 ÷ (1일작업량 × 조수) + 간접·보정일. "작업일수(직접)"에 값을 넣으면 그 값을 우선 적용합니다.</p>
+  <table id="acts">
+    <thead><tr><th>공종명</th><th>작업수량</th><th>1일작업량</th><th>조수</th>
+      <th>간접·보정일</th><th>작업일수(직접)</th><th>기상조건</th><th></th></tr></thead>
+    <tbody></tbody>
+  </table>
+  <button id="addRow">+ 공종 추가</button>
+</section>
+
+<button id="calc" class="primary">계산하기</button>
+
+<section id="result" hidden>
+  <h2>3. 산정 결과</h2>
+  <div id="summary"></div>
+  <table id="resTable"></table>
+  <div id="detail"></div>
+  <button id="csv">CSV 다운로드</button>
+</section>
+
+<section>
+  <h2>4. 적정성 검증 (부록5 회귀식)</h2>
+  <div class="grid">
+    <label>시설 유형 <select id="model"></select></label>
+    <label>총공사비 C (억원) <input type="number" id="vC"></label>
+    <label>지상층수 G <input type="number" id="vG"></label>
+    <label>지하층수 B <input type="number" id="vB"></label>
+    <label>연면적 (㎡) <input type="number" id="vA"></label>
+  </div>
+  <button id="verify">검증</button>
+  <div id="verifyOut"></div>
+</section>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
