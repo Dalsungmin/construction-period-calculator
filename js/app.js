@@ -1,10 +1,17 @@
 import { calcProject, PRESETS, cursorToDate } from './calc.js';
 import { REGRESSION, verify } from './regression.js';
+import { renderResult } from './result.js';
 
 const $ = id => document.getElementById(id);
-const fmt = d => d.toISOString().slice(0, 10);
+// 로컬 날짜 기준 (toISOString은 한국시간에서 하루 밀릴 수 있음)
+const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const r1 = x => Math.round(x * 10) / 10;
 let DB, last;
+
+function showError(msg) {
+  $('err').textContent = msg;
+  $('err').style.display = msg ? 'block' : 'none';
+}
 
 async function init() {
   const [holidays, weather, prep] = await Promise.all(
@@ -19,7 +26,8 @@ async function init() {
   $('model').innerHTML = Object.entries(REGRESSION)
     .map(([k, v]) => `<option value="${k}">${v.label} (${v.rangeText})</option>`).join('');
 
-  // 예시 행
+  if (!$('start').value) $('start').value = `${new Date().getFullYear() + 1}-03-01`;
+
   addRow({ name: '토공사', direct: 40, preset: 'earth' });
   addRow({ name: '골조공사', direct: 150, preset: 'rcBldg' });
   addRow({ name: '마감공사', direct: 110, preset: 'indoor' });
@@ -37,13 +45,15 @@ function addRow(a = {}) {
     <td><input class="extra" type="number" value="0"></td>
     <td><input class="direct" type="number" value="${a.direct ?? ''}"></td>
     <td><select class="preset">${opts}</select></td>
-    <td><button class="del">삭제</button></td>`;
+    <td><button type="button" class="del">삭제</button></td>`;
   tr.querySelector('.del').onclick = () => tr.remove();
   $('acts').tBodies[0].appendChild(tr);
 }
 
 function readActs() {
-  return [...$('acts').tBodies[0].rows].map((tr, i) => {
+  const rows = [...$('acts').tBodies[0].rows];
+  if (!rows.length) throw new Error('공종을 1개 이상 추가하세요');
+  return rows.map((tr, i) => {
     const v = c => parseFloat(tr.querySelector(c).value);
     const name = tr.querySelector('.name').value || `공종${i + 1}`;
     let workDays = v('.direct');
@@ -52,12 +62,16 @@ function readActs() {
         throw new Error(`${name}: 수량·1일작업량·조수 또는 작업일수(직접)를 입력하세요`);
       workDays = v('.qty') / (v('.rate') * v('.crew')) + (v('.extra') || 0);
     }
+    if (!(workDays > 0)) throw new Error(`${name}: 작업일수는 0보다 커야 합니다`);
     return { name, workDays, preset: tr.querySelector('.preset').value };
   });
 }
 
 function calc() {
+  showError('');
   try {
+    if (!DB) throw new Error('데이터를 아직 불러오지 못했습니다');
+    if (!$('start').value) throw new Error('착공일을 입력하세요');
     const clean = +$('cleanDays').value;
     if (clean > 30) throw new Error('정리기간은 최대 30일입니다');
     last = calcProject({
@@ -66,20 +80,22 @@ function calc() {
       acts: readActs(), db: DB, dust: $('dust').checked, round: $('round').checked
     });
     render(last);
-  } catch (e) { alert(e.message); }
+  } catch (e) { showError(e.message); console.error(e); }
 }
 
 function render(p) {
-  $('result').hidden = false;
-  $('summary').innerHTML = `<h3>총 공사기간: ${p.total}일 (준공 예정 ${fmt(p.finish)})</h3>
-    준비 ${p.prepDays}일 + CP 공종 ${r1(p.cpSum)}일 + 정리 ${p.cleanDays}일`;
-  $('resTable').innerHTML = `<tr><th>공종</th><th>착수</th><th>완료</th><th>작업일</th><th>비작업일</th><th>공사기간</th></tr>` +
-    p.results.map(r => `<tr><td>${r.name}</td><td>${fmt(cursorToDate(r.begin))}</td><td>${fmt(cursorToDate(r.end))}</td>
-      <td>${r1(r.workDays)}</td><td>${r1(r.nonWork)}</td><td>${r1(r.duration)}</td></tr>`).join('');
-  $('detail').innerHTML = p.results.map(r => `<details><summary>${r.name} 월별 내역</summary>
-    <table><tr><th>년월</th><th>A 기상</th><th>B 공휴일</th><th>C 중복</th><th>비작업일</th><th>반영 작업일</th><th>반영 비작업일</th></tr>
+  renderResult(p);                       // 요약·타임라인·그래프·표 (result.js)
+  $('verifyCard').hidden = false;
+  $('verifyOut').innerHTML = '';
+
+  // 산정 근거: 공종별 월별 A·B·C
+  $('calcDetail').innerHTML = p.results.map(r => `<details><summary>${r.name} 월별 내역</summary>
+    <div class="tbl-wrap"><table class="tbl">
+    <tr><th>년월</th><th>A 기상</th><th>B 공휴일</th><th>C 중복</th><th>비작업일</th><th>반영 작업일</th><th>반영 비작업일</th></tr>
     ${r.log.map(l => `<tr><td>${l.y}.${l.m}</td><td>${r1(l.A)}</td><td>${l.B}</td><td>${r1(l.C)}</td>
-      <td>${l.N}</td><td>${r1(l.work)}</td><td>${r1(l.non)}</td></tr>`).join('')}</table></details>`).join('');
+      <td>${r1(l.N)}</td><td>${r1(l.work)}</td><td>${r1(l.non)}</td></tr>`).join('')}</table></div></details>`).join('');
+
+  $('result').scrollIntoView({ behavior: 'smooth' });
 }
 
 function downloadCSV() {
@@ -87,8 +103,9 @@ function downloadCSV() {
   const rows = [['공종', '착수', '완료', '작업일', '비작업일', '공사기간'],
     ...last.results.map(r => [r.name, fmt(cursorToDate(r.begin)), fmt(cursorToDate(r.end)),
       r1(r.workDays), r1(r.nonWork), r1(r.duration)]),
-    [], ['준비기간', last.prepDays], ['정리기간', last.cleanDays], ['총 공사기간', last.total]];
-  const blob = new Blob(['\uFEFF' + rows.map(r => r.join(',')).join('\n')], { type: 'text/csv' }); // BOM: 엑셀 한글 깨짐 방지
+    [], ['준비기간', last.prepDays], ['정리기간', last.cleanDays], ['총 공사기간', last.total],
+    ['준공 예정일', fmt(last.finish)]];
+  const blob = new Blob(['\uFEFF' + rows.map(r => r.join(',')).join('\n')], { type: 'text/csv' });
   const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: '공사기간_산정.csv' });
   a.click();
 }
@@ -108,5 +125,4 @@ $('addRow').onclick = () => addRow();
 $('calc').onclick = calc;
 $('csv').onclick = downloadCSV;
 $('verify').onclick = doVerify;
-init();
-
+init().catch(e => showError('데이터 불러오기 실패: ' + e.message));
