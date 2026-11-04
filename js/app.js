@@ -1,12 +1,15 @@
 import { calcProject, PRESETS, cursorToDate } from './calc.js';
 import { REGRESSION, verify } from './regression.js';
 import { renderResult } from './result.js';
+import { simulateStarts, renderSimulation } from './simulate.js';
+import { readKmaCsv, compareActual, renderActual } from './actual.js';
+
 
 const $ = id => document.getElementById(id);
 // 로컬 날짜 기준 (toISOString은 한국시간에서 하루 밀릴 수 있음)
 const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const r1 = x => Math.round(x * 10) / 10;
-let DB, last;
+let DB, last, lastParams, lastActs;
 
 function showError(msg) {
   $('err').textContent = msg;
@@ -74,11 +77,14 @@ function calc() {
     if (!$('start').value) throw new Error('착공일을 입력하세요');
     const clean = +$('cleanDays').value;
     if (clean > 30) throw new Error('정리기간은 최대 30일입니다');
-    last = calcProject({
+        lastActs = readActs();
+    lastParams = {
       startDate: $('start').value, station: $('station').value,
       prepDays: +$('prepDays').value, cleanDays: clean,
-      acts: readActs(), db: DB, dust: $('dust').checked, round: $('round').checked
-    });
+      acts: lastActs, db: DB, dust: $('dust').checked, round: $('round').checked
+    };
+    last = calcProject(lastParams);
+
     render(last);
   } catch (e) { showError(e.message); console.error(e); }
 }
@@ -94,6 +100,12 @@ function render(p) {
     <tr><th>년월</th><th>A 기상</th><th>B 공휴일</th><th>C 중복</th><th>비작업일</th><th>반영 작업일</th><th>반영 비작업일</th></tr>
     ${r.log.map(l => `<tr><td>${l.y}.${l.m}</td><td>${r1(l.A)}</td><td>${l.B}</td><td>${r1(l.C)}</td>
       <td>${r1(l.N)}</td><td>${r1(l.work)}</td><td>${r1(l.non)}</td></tr>`).join('')}</table></div></details>`).join('');
+
+    $('simCard').hidden = false;
+  renderSimulation(simulateStarts(lastParams), +lastParams.startDate.slice(5, 7));
+  $('actualCard').hidden = false;
+  $('actualOut').innerHTML = '';
+
 
   $('result').scrollIntoView({ behavior: 'smooth' });
 }
@@ -125,4 +137,15 @@ $('addRow').onclick = () => addRow();
 $('calc').onclick = calc;
 $('csv').onclick = downloadCSV;
 $('verify').onclick = doVerify;
+async function doActual() {
+  try {
+    if (!last) throw new Error('먼저 공사기간을 계산하세요');
+    const file = $('csvFile').files[0];
+    if (!file) throw new Error('ASOS 일자료 CSV 파일을 선택하세요');
+    const data = await readKmaCsv(file);
+    renderActual(compareActual(last, lastActs, data), { ...data, selected: lastParams.station });
+  } catch (e) { $('actualOut').textContent = e.message; console.error(e); }
+}
+$('actualBtn').onclick = doActual;
+
 init().catch(e => showError('데이터 불러오기 실패: ' + e.message));
