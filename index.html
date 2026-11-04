@@ -1,72 +1,200 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>적정 공사기간 산정기</title>
-<style>
-  body{font-family:'Malgun Gothic',sans-serif;max-width:1100px;margin:20px auto;padding:0 12px}
-  section{border:1px solid #ddd;border-radius:8px;padding:12px 16px;margin:12px 0}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:8px}
-  label{display:flex;flex-direction:column;font-size:14px}
-  table{width:100%;border-collapse:collapse;font-size:14px}
-  th,td{border:1px solid #ccc;padding:4px;text-align:center}
-  td input,td select{width:95%}
-  button{padding:6px 14px;margin:4px 2px;cursor:pointer}
-  .primary{background:#1f6feb;color:#fff;border:none;border-radius:6px;font-size:16px}
-  .ok{color:green;font-weight:bold}.ng{color:crimson;font-weight:bold}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>공사기간 산정</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    /* 입력 화면 보조 스타일 */
+    .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .act{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-top:10px;background:#fafbfc}
+    .act-head{display:flex;justify-content:space-between;align-items:center;font-size:13px;font-weight:600}
+    .card .act-del{width:auto;margin:0;padding:4px 10px;background:#fee2e2;color:#b91c1c;font-size:12px}
+    .card .btn-sub{background:#eef2ff;color:var(--primary);margin-top:10px;padding:10px;font-size:14px}
+    .chk{display:flex;gap:16px;margin-top:14px;font-size:13px}
+    .chk label{display:flex;align-items:center;gap:6px;margin:0;color:var(--text)}
+    .card .chk input{width:auto}
+    .conds{font-size:11px;color:var(--sub);margin-top:6px;line-height:1.5}
+    .err{display:none;margin-top:12px;padding:10px;border-radius:8px;background:#fee2e2;color:#b91c1c;font-size:13px}
+    .placeholder{color:var(--sub);font-size:14px;text-align:center;padding:60px 0}
+  </style>
 </head>
 <body>
-<h1>적정 공사기간 산정기 <small>(2026 가이드라인 기준)</small></h1>
+  <header class="header"><h1>공사기간 산정</h1></header>
 
-<section>
-  <h2>1. 기본정보</h2>
-  <div class="grid">
-    <label>착공일 <input type="date" id="start" value="2027-03-01"></label>
-    <label>기상관측지점 <select id="station"></select></label>
-    <label>준비기간 유형 <select id="prepType"></select></label>
-    <label>준비기간(일) <input type="number" id="prepDays"></label>
-    <label>정리기간(일, 최대 30) <input type="number" id="cleanDays" value="30" min="0" max="30"></label>
-    <label><span><input type="checkbox" id="dust"> 수도권 미세먼지 (+5일/년)</span></label>
-    <label><span><input type="checkbox" id="round" checked> 월 비작업일수 정수 반올림</span></label>
-  </div>
-</section>
+  <main class="layout">
+    <!-- ── 입력 ── -->
+    <section class="card">
+      <h2>입력 조건</h2>
 
-<section>
-  <h2>2. 주공정(CP) 공종</h2>
-  <p style="font-size:13px">작업일수 = 수량 ÷ (1일작업량 × 조수) + 간접·보정일. "작업일수(직접)"에 값을 넣으면 그 값을 우선 적용합니다.</p>
-  <table id="acts">
-    <thead><tr><th>공종명</th><th>작업수량</th><th>1일작업량</th><th>조수</th>
-      <th>간접·보정일</th><th>작업일수(직접)</th><th>기상조건</th><th></th></tr></thead>
-    <tbody></tbody>
-  </table>
-  <button id="addRow">+ 공종 추가</button>
-</section>
+      <label for="station">관측지점</label>
+      <select id="station"><option>불러오는 중...</option></select>
 
-<button id="calc" class="primary">계산하기</button>
+      <label for="startDate">착공일</label>
+      <input type="date" id="startDate">
 
-<section id="result" hidden>
-  <h2>3. 산정 결과</h2>
-  <div id="summary"></div>
-  <table id="resTable"></table>
-  <div id="detail"></div>
-  <button id="csv">CSV 다운로드</button>
-</section>
+      <div class="row2">
+        <div>
+          <label for="prepDays">준비기간(일)</label>
+          <input type="number" id="prepDays" min="0" value="30">
+        </div>
+        <div>
+          <label for="cleanDays">정리기간(일)</label>
+          <input type="number" id="cleanDays" min="0" value="30">
+        </div>
+      </div>
 
-<section>
-  <h2>4. 적정성 검증 (부록5 회귀식)</h2>
-  <div class="grid">
-    <label>시설 유형 <select id="model"></select></label>
-    <label>총공사비 C (억원) <input type="number" id="vC"></label>
-    <label>지상층수 G <input type="number" id="vG"></label>
-    <label>지하층수 B <input type="number" id="vB"></label>
-    <label>연면적 (㎡) <input type="number" id="vA"></label>
-  </div>
-  <button id="verify">검증</button>
-  <div id="verifyOut"></div>
-</section>
+      <h3>공종 (순차 진행)</h3>
+      <div id="acts"></div>
+      <button type="button" class="btn-sub" id="addAct">+ 공종 추가</button>
 
-<script type="module" src="js/app.js"></script>
+      <div class="chk">
+        <label><input type="checkbox" id="dust"> 미세먼지 반영</label>
+        <label><input type="checkbox" id="round" checked> 월 비작업일 반올림</label>
+      </div>
+
+      <button type="button" id="calcBtn">계산하기</button>
+      <div class="err" id="err"></div>
+    </section>
+
+    <!-- ── 결과 ── -->
+    <div>
+      <section class="card" id="emptyMsg">
+        <div class="placeholder">왼쪽에 조건을 입력하고 <b>계산하기</b>를 누르세요.</div>
+      </section>
+
+      <section class="card" id="result" hidden>
+        <h2>산정 결과</h2>
+        <div class="kpis">
+          <div class="kpi main"><span>총 공사기간</span><b id="kTotal">-</b></div>
+          <div class="kpi"><span>준공 예정일</span><b id="kEnd">-</b></div>
+          <div class="kpi"><span>순작업일</span><b id="kWork">-</b></div>
+          <div class="kpi"><span>비작업일</span><b id="kNon">-</b></div>
+        </div>
+
+        <h3>공정 구성</h3>
+        <div class="timeline" id="timeline"></div>
+
+        <h3>공종별 일정</h3>
+        <table class="tbl" id="actTable"></table>
+
+        <h3>월별 작업일 / 비작업일</h3>
+        <div class="chart-box"><canvas id="monthChart"></canvas></div>
+
+        <h3>월별 상세</h3>
+        <table class="tbl" id="detail"></table>
+      </section>
+    </div>
+  </main>
+
+  <script type="module">
+    import { calcProject, PRESETS, CONDITIONS } from './calc.js';
+    import { renderResult } from './result.js';
+
+    const $ = id => document.getElementById(id);
+    const db = {};
+
+    // ── 데이터 불러오기 ──
+    async function loadData() {
+      const [weather, holidays] = await Promise.all([
+        fetch('weather.json').then(r => r.json()),
+        fetch('holidays.json').then(r => r.json())
+      ]);
+      db.weather = weather;
+      db.holidays = holidays;
+
+      $('station').innerHTML = Object.entries(weather.stations)
+        .map(([id, st]) => `<option value="${id}">${st.name} (${id})</option>`).join('');
+      if (weather.stations['108']) $('station').value = '108';   // 기본: 서울
+    }
+
+    // ── 공종 행 ──
+    const presetOptions = Object.entries(PRESETS)
+      .map(([k, p]) => `<option value="${k}">${p.label}</option>`).join('');
+
+    function condText(key) {
+      const c = PRESETS[key].conds;
+      return c.length ? '적용: ' + c.map(x => CONDITIONS[x]).join(' · ') : '기상조건 미적용';
+    }
+
+    function addAct(preset = 'earth', workDays = 60, name = '') {
+      const div = document.createElement('div');
+      div.className = 'act';
+      div.innerHTML = `
+        <div class="act-head"><span class="act-no"></span>
+          <button type="button" class="act-del">삭제</button></div>
+        <label>공종명 (선택)</label>
+        <input type="text" class="a-name" placeholder="비우면 프리셋 이름 사용" value="${name}">
+        <div class="row2">
+          <div><label>기상조건 프리셋</label><select class="a-preset">${presetOptions}</select></div>
+          <div><label>순작업일수</label><input type="number" class="a-days" min="1" value="${workDays}"></div>
+        </div>
+        <div class="conds"></div>`;
+      const sel = div.querySelector('.a-preset');
+      sel.value = preset;
+      div.querySelector('.conds').textContent = condText(preset);
+      sel.onchange = () => div.querySelector('.conds').textContent = condText(sel.value);
+      div.querySelector('.act-del').onclick = () => { div.remove(); renumber(); };
+      $('acts').appendChild(div);
+      renumber();
+    }
+
+    function renumber() {
+      document.querySelectorAll('.act').forEach((el, i) =>
+        el.querySelector('.act-no').textContent = `공종 ${i + 1}`);
+    }
+
+    // ── 계산 ──
+    function showError(msg) {
+      $('err').textContent = msg;
+      $('err').style.display = msg ? 'block' : 'none';
+    }
+
+    function calculate() {
+      showError('');
+      try {
+        if (!db.weather) throw new Error('데이터를 아직 불러오지 못했습니다.');
+        if (!$('startDate').value) throw new Error('착공일을 입력하세요.');
+
+        const acts = [...document.querySelectorAll('.act')].map(el => ({
+          name: el.querySelector('.a-name').value.trim(),
+          preset: el.querySelector('.a-preset').value,
+          workDays: Number(el.querySelector('.a-days').value)
+        }));
+        if (!acts.length) throw new Error('공종을 1개 이상 추가하세요.');
+        if (acts.some(a => !(a.workDays > 0))) throw new Error('순작업일수는 1 이상이어야 합니다.');
+
+        const res = calcProject({
+          startDate: $('startDate').value,
+          station: $('station').value,
+          prepDays: Number($('prepDays').value) || 0,
+          cleanDays: Number($('cleanDays').value) || 0,
+          acts, db,
+          dust: $('dust').checked,
+          round: $('round').checked
+        });
+
+        $('emptyMsg').hidden = true;
+        renderResult(res);
+        if (window.innerWidth <= 860) $('result').scrollIntoView({ behavior: 'smooth' });
+      } catch (e) {
+        showError(e.message);
+        console.error(e);
+      }
+    }
+
+    // ── 초기화 ──
+    $('addAct').onclick = () => addAct();
+    $('calcBtn').onclick = calculate;
+
+    const today = new Date();
+    $('startDate').value = `${today.getFullYear() + 1}-03-01`;   // 기본 착공일: 내년 3월 1일
+    addAct('earth', 60, '토공');
+    addAct('rcBldg', 120, '골조');
+
+    loadData().catch(e => showError('데이터 불러오기 실패: ' + e.message));
+  </script>
 </body>
 </html>
