@@ -1,14 +1,31 @@
 import { PRESETS, CONDITIONS, cursorToDate } from './calc.js';
 
-// ⚠ 키는 calc.js의 CONDITIONS 키와 같아야 하고,
-//   기준값은 weather.json(평년값)을 만들 때 쓴 기준과 같아야 합니다.
+// calc.js의 CONDITIONS 키와 1:1 대응
 export const RULES = {
-  rain: d => d.rain >= 10,   // 일강수량 10mm 이상
-  snow: d => d.snow >= 5,    // 일 최심신적설 5cm 이상
-  cold: d => d.tmin <= -10,  // 일 최저기온 -10℃ 이하
-  hot:  d => d.tmax >= 35,   // 일 최고기온 35℃ 이상
-  wind: d => d.wind >= 14    // 일 최대풍속 14m/s 이상
+  feel33: d => d.feel >= 33,
+  feel35: d => d.feel >= 35,
+  tmax33: d => d.tmax >= 33,
+  tmax35: d => d.tmax >= 35,
+  tmax0:  d => d.tmax <= 0,
+  snow5:  d => d.snow >= 5,
+  tmax0_or_snow5: d => d.tmax <= 0 || d.snow >= 5,
+  tmin_m12: d => d.tmin <= -12,
+  rain3:  d => d.rain >= 3,
+  rain5:  d => d.rain >= 5,
+  rain10: d => d.rain >= 10,
+  rain20: d => d.rain >= 20,
+  wind15: d => d.gust >= 15          // 최대 '순간' 풍속
 };
+
+// 기상청 여름철 체감온도식 (Stull 습구온도 사용)
+function feelTemp(T, RH) {
+  if (Number.isNaN(T) || Number.isNaN(RH)) return NaN;
+  const at = Math.atan;
+  const Tw = T * at(0.151977 * Math.sqrt(RH + 8.313659)) + at(T + RH) - at(RH - 1.67633)
+           + 0.00391838 * RH ** 1.5 * at(0.023101 * RH) - 4.686035;
+  return -0.2442 + 0.55399 * Tw + 0.45535 * T - 0.0022 * Tw ** 2 + 0.00278 * Tw * T + 3.0;
+}
+
 
 const $ = id => document.getElementById(id);
 const r1 = x => Math.round(x * 10) / 10;
@@ -24,14 +41,16 @@ export async function readKmaCsv(file) {
   const [headLine, ...lines] = text.trim().split(/\r?\n/);
   const head = headLine.replace(/^\uFEFF/, '').split(',').map(s => s.trim().replace(/"/g, ''));
   const find = t => head.findIndex(t);
-  const idx = {
+    const idx = {
     date: find(h => h === '일시'),
     rain: find(h => h.startsWith('일강수량')),
     tmin: find(h => h.startsWith('최저기온(')),
     tmax: find(h => h.startsWith('최고기온(')),
-    wind: find(h => h.startsWith('최대 풍속(')),
+    gust: find(h => h.startsWith('최대 순간 풍속(')),
+    rhmin: find(h => h.startsWith('최소 상대습도')),
     snow: find(h => h.startsWith('일 최심신적설('))
   };
+
   if (idx.date < 0) throw new Error('ASOS 일자료 CSV가 아닙니다 ("일시" 열이 없음)');
 
   const num = v => (v?.trim() ? Number(v) : NaN);   // 빈 값은 NaN → 모든 비교가 false
@@ -42,10 +61,13 @@ export async function readKmaCsv(file) {
     if (!c[idx.date]) continue;
     station ||= c[0].trim();
     const g = k => (idx[k] >= 0 ? num(c[idx[k]]) : NaN);
+    const tmax = g('tmax');
     days.set(c[idx.date].trim().slice(0, 10), {
       rain: g('rain') || 0, snow: g('snow') || 0,   // 강수·적설 빈칸 = 0
-      tmin: g('tmin'), tmax: g('tmax'), wind: g('wind')
+      tmin: g('tmin'), tmax, gust: g('gust'),
+      feel: feelTemp(tmax, g('rhmin'))
     });
+
   }
   const missingCols = Object.entries(idx).filter(([, i]) => i < 0).map(([k]) => k);
   return { station, days, missingCols };
