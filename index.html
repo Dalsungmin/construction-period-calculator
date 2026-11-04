@@ -90,8 +90,8 @@
   </main>
 
   <script type="module">
-    import { calcProject, PRESETS, CONDITIONS } from './calc.js';
-    import { renderResult } from './result.js';
+    import { calcProject, PRESETS, CONDITIONS } from './js/calc.js';
+    import { renderResult } from './js/result.js';
 
     const $ = id => document.getElementById(id);
     const db = {};
@@ -99,8 +99,8 @@
     // ── 데이터 불러오기 ──
     async function loadData() {
       const [weather, holidays] = await Promise.all([
-        fetch('weather.json').then(r => r.json()),
-        fetch('holidays.json').then(r => r.json())
+        fetch('data/weather.json').then(r => r.json()),
+        fetch('data/holidays.json').then(r => r.json())
       ]);
       db.weather = weather;
       db.holidays = holidays;
