@@ -107,6 +107,16 @@ function render(p) {
   $('actualOut').innerHTML = '';
 
 
+  const prep = lastParams.prepDays, clean = lastParams.cleanDays;
+  const work = lastActs.reduce((s, a) => s + Math.ceil(a.workDays), 0);
+  const non = last.total - prep - clean - work;
+  $('fPrep').textContent = prep + '일';
+  $('fWork').textContent = work + '일';
+  $('fClean').textContent = clean + '일';
+  $('fNon').textContent = non + '일';
+  $('fTotal').textContent = `= 총 ${last.total}일`;
+
+  
   $('result').scrollIntoView({ behavior: 'smooth' });
 }
 
